@@ -1,0 +1,10 @@
+{
+  "name": "ToolKit Dev",
+  "short_name": "ToolKit",
+  "description": "Organizador de herramientas para desarrolladores",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0D",
+  "theme_color": "#FFB800",
+  "icons": []
+}
