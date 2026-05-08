@@ -34,9 +34,11 @@ const init = initSqlJs().then(SQL => {
     importance TEXT NOT NULL DEFAULT 'util', tags TEXT NOT NULL DEFAULT '[]',
     favorite INTEGER NOT NULL DEFAULT 0, visits INTEGER NOT NULL DEFAULT 0,
     favicon TEXT NOT NULL DEFAULT '',
+    last_visited_at TEXT,
     created_at TEXT, updated_at TEXT
   )`);
   try { db.run("ALTER TABLE herramientas ADD COLUMN favicon TEXT NOT NULL DEFAULT ''"); } catch {}
+  try { db.run("ALTER TABLE herramientas ADD COLUMN last_visited_at TEXT"); } catch {}
   saveDb();
 });
 

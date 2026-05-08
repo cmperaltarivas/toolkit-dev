@@ -159,21 +159,11 @@ function timeAgo(dateStr) {
 
 function renderDashboard(stats) {
   const pctFav = stats.total > 0 ? Math.round((stats.favoritas / stats.total) * 100) : 0;
-  const crit = stats.porImportancia.find(i => i.importance === 'critico');
-  const esen = stats.porImportancia.find(i => i.importance === 'esencial');
-  const util = stats.porImportancia.find(i => i.importance === 'util');
-  const opc = stats.porImportancia.find(i => i.importance === 'opcional');
   document.getElementById('dashStats').innerHTML = `
     <div class="dash-card"><h3>Total</h3><div class="dash-number">${stats.total}</div><div class="dash-sub">herramientas registradas</div></div>
     <div class="dash-card"><h3>⭐ Favoritas</h3><div class="dash-number">${stats.favoritas}</div><div class="dash-sub">${pctFav}% del total</div></div>
     <div class="dash-card"><h3>📂 Categorías</h3><div class="dash-number">${stats.porCategoria.length}</div><div class="dash-sub">distintas categorías</div></div>
-    <div class="dash-card"><h3>👁 Visitas</h3><div class="dash-number">${stats.totalVisits}</div><div class="dash-sub">en total acumuladas</div></div>
-    <div class="dash-card" style="grid-column:1/-1"><h3>📊 Resumen por importancia</h3><div class="dash-bars-compact">
-      <div class="dc-bar"><span class="dc-lbl">⭐ Crítico</span><span class="dc-val">${crit ? crit.count : 0}</span><div class="bar"><div class="bar-fill" style="width:${crit ? (crit.count/stats.total)*100 : 0}%;background:var(--danger)"></div></div></div>
-      <div class="dc-bar"><span class="dc-lbl">🔥 Esencial</span><span class="dc-val">${esen ? esen.count : 0}</span><div class="bar"><div class="bar-fill" style="width:${esen ? (esen.count/stats.total)*100 : 0}%;background:var(--primary)"></div></div></div>
-      <div class="dc-bar"><span class="dc-lbl">💡 Útil</span><span class="dc-val">${util ? util.count : 0}</span><div class="bar"><div class="bar-fill" style="width:${util ? (util.count/stats.total)*100 : 0}%;background:var(--secondary)"></div></div></div>
-      <div class="dc-bar"><span class="dc-lbl">🔹 Opcional</span><span class="dc-val">${opc ? opc.count : 0}</span><div class="bar"><div class="bar-fill" style="width:${opc ? (opc.count/stats.total)*100 : 0}%;background:var(--text-dim)"></div></div></div>
-    </div></div>`;
+    <div class="dash-card"><h3>👁 Visitas</h3><div class="dash-number">${stats.totalVisits}</div><div class="dash-sub">en total acumuladas</div></div>`;
 
   const maxCat = Math.max(...stats.porCategoria.map(c => c.count), 1);
   document.getElementById('dashCat').innerHTML = stats.porCategoria.map(c =>
@@ -186,8 +176,15 @@ function renderDashboard(stats) {
   document.getElementById('catExpanded').classList.remove('open');
 
   const impLabels = { critico: '⭐ Crítico', esencial: '🔥 Esencial', util: '💡 Útil', opcional: '🔹 Opcional' };
+  const impKeys = { critico: 'critico', esencial: 'esencial', util: 'util', opcional: 'opcional' };
   const maxImp = Math.max(...stats.porImportancia.map(c => c.count), 1);
-  document.getElementById('dashImp').innerHTML = stats.porImportancia.map(c => `<li><span class="lbl">${impLabels[c.importance] || c.importance}</span><div class="bar"><div class="bar-fill" style="width:${(c.count/maxImp)*100}%"></div></div><span class="num">${c.count}</span></li>`).join('') || '<li style="color:var(--text-dim)">Sin datos</li>';
+  document.getElementById('dashImp').innerHTML = stats.porImportancia.map(c =>
+    `<li class="imp-row" data-imp="${esc(c.importance)}" onclick="toggleImpExpand('${jsStr(c.importance)}')">
+      <span class="lbl imp-lbl">${impLabels[c.importance] || c.importance}</span>
+      <div class="bar"><div class="bar-fill" style="width:${(c.count/maxImp)*100}%"></div></div>
+      <span class="num">${c.count}</span>
+    </li>`
+  ).join('') || '<li style="color:var(--text-dim)">Sin datos</li>';
 
   const maxVis = Math.max(...stats.masVisitadas.map(t => t.visits), 1);
   document.getElementById('dashTop').innerHTML = stats.masVisitadas.map(t => `<li><a href="${esc(t.url)}" target="_blank" rel="noopener" class="lbl">${esc(t.name)}</a><div class="bar"><div class="bar-fill" style="width:${(t.visits/maxVis)*100}%"></div></div><span class="num">${t.visits}</span></li>`).join('') || '<li style="color:var(--text-dim)">Sin visitas aún</li>';
@@ -198,7 +195,10 @@ function renderDashboard(stats) {
 
   const impLabels2 = { critico: '⭐ Crítico', esencial: '🔥 Esencial' };
   document.getElementById('dashPrio').innerHTML = (stats.prioSinVisitar && stats.prioSinVisitar.length)
-    ? stats.prioSinVisitar.map(t => `<li><a href="${esc(t.url)}" target="_blank" rel="noopener" class="lbl" onclick="return visitTool('${jsStr(t.id)}','${esc(t.url)}')">${esc(t.name)}</a><span class="num">${impLabels2[t.importance] || t.importance}</span></li>`).join('')
+    ? stats.prioSinVisitar.map(t => {
+        const ago = t.last_visited_at ? timeAgo(t.last_visited_at) : 'nunca';
+        return `<li><a href="${esc(t.url)}" target="_blank" rel="noopener" class="lbl" onclick="return visitTool('${jsStr(t.id)}','${esc(t.url)}')">${esc(t.name)}</a><span class="num">${impLabels2[t.importance] || t.importance}</span><span class="num" style="font-size:0.6rem;color:var(--text-dim);font-weight:400">${ago}</span></li>`;
+      }).join('')
     : '<li style="color:var(--text-dim);font-size:0.78rem">Todas las importantes fueron visitadas ✅</li>';
 
   const cloud = document.getElementById('tagCloud');

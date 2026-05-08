@@ -10,11 +10,14 @@ export function GET() {
     const toolsByCat = {};
     allTools.forEach(t => { const c = t.category || 'Otro'; if (!toolsByCat[c]) toolsByCat[c] = []; if (toolsByCat[c].length < 10) toolsByCat[c].push({ id: t.id, name: t.name, url: t.url }); });
     const porCategoria = rowsCat.map(r => ({ category: r.category, count: r.count, tools: toolsByCat[r.category] || [] }));
-    const porImportancia = qall('SELECT importance, COUNT(*) as count FROM herramientas GROUP BY importance ORDER BY count DESC');
+    const rowsImp = qall('SELECT importance, COUNT(*) as count FROM herramientas GROUP BY importance ORDER BY count DESC');
+    const toolsByImp = {};
+    allTools.forEach(t => { const imp = t.importance || 'util'; if (!toolsByImp[imp]) toolsByImp[imp] = []; if (toolsByImp[imp].length < 10) toolsByImp[imp].push({ id: t.id, name: t.name, url: t.url }); });
+    const porImportancia = rowsImp.map(r => ({ importance: r.importance, count: r.count, tools: toolsByImp[r.importance] || [] }));
     const masVisitadas = qall('SELECT id, name, url, visits FROM herramientas ORDER BY visits DESC LIMIT 5');
     const totalVisits = qget('SELECT COALESCE(SUM(visits), 0) as total FROM herramientas');
     const nuncaVisitadas = qall('SELECT id, name, url, category FROM herramientas WHERE visits = 0 ORDER BY created_at DESC LIMIT 10');
-    const prioSinVisitar = qall("SELECT id, name, url, importance FROM herramientas WHERE visits = 0 AND importance IN ('critico','esencial') ORDER BY importance DESC, created_at DESC LIMIT 10");
+    const prioSinVisitar = qall("SELECT id, name, url, importance, visits, last_visited_at FROM herramientas WHERE importance IN ('critico','esencial') AND (last_visited_at IS NULL OR last_visited_at < datetime('now', '-7 days')) ORDER BY importance DESC, last_visited_at ASC NULLS FIRST LIMIT 10");
     const allTags = qall('SELECT tags FROM herramientas');
     const tagCount = {};
     allTags.forEach(r => {

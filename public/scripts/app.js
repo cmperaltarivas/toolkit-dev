@@ -269,6 +269,47 @@ async function undoDelete() {
 
 let expandedTag = null;
 let expandedCat = null;
+let expandedImp = null;
+
+async function toggleImpExpand(importance) {
+  const list = document.getElementById('dashImp');
+  const rows = document.querySelectorAll('.imp-row');
+  const existing = list.querySelector('.cat-expanded-row');
+
+  if (existing) existing.remove();
+  rows.forEach(r => r.classList.remove('active'));
+
+  if (expandedImp === importance) {
+    expandedImp = null;
+    return;
+  }
+
+  expandedImp = importance;
+  const row = list.querySelector(`.imp-row[data-imp="${esc(importance)}"]`);
+  if (!row) return;
+  row.classList.add('active');
+
+  const expandedRow = document.createElement('li');
+  expandedRow.className = 'cat-expanded-row';
+  expandedRow.innerHTML = '<span style="font-size:0.72rem;color:var(--text-dim)">Cargando...</span>';
+  row.after(expandedRow);
+
+  try {
+    const data = await store.list({ importance, limit: 100, offset: 0 });
+    const tools = data.tools || [];
+    if (!tools.length) {
+      expandedRow.innerHTML = '<span style="font-size:0.72rem;color:var(--text-dim);padding:0.25rem 0">Sin herramientas</span>';
+      return;
+    }
+    expandedRow.innerHTML = '<div class="cat-pills">' + tools.map((t, i) => {
+      const host = hostFromUrl(t.url);
+      return `<a href="${esc(t.url)}" target="_blank" rel="noopener" class="tag-tool-pill" style="animation-delay:${(i%10)*0.04}s" onclick="return visitTool('${jsStr(t.id)}','${esc(t.url)}')">
+        <img class="favicon" src="https://icons.duckduckgo.com/ip3/${esc(host)}.ico" alt="" loading="lazy" onerror="faviconFallback(this,'${esc(host)}')">${esc(t.name)}</a>`;
+    }).join('') + '</div>';
+  } catch {
+    expandedRow.innerHTML = '<span style="font-size:0.72rem;color:var(--text-dim);padding:0.25rem 0">Error al cargar</span>';
+  }
+}
 
 async function toggleCatExpand(category) {
   const list = document.getElementById('dashCat');
@@ -300,9 +341,9 @@ async function toggleCatExpand(category) {
       expandedRow.innerHTML = '<span style="font-size:0.72rem;color:var(--text-dim);padding:0.25rem 0">Sin herramientas</span>';
       return;
     }
-    expandedRow.innerHTML = '<div class="cat-pills">' + tools.map(t => {
+    expandedRow.innerHTML = '<div class="cat-pills">' + tools.map((t, i) => {
       const host = hostFromUrl(t.url);
-      return `<a href="${esc(t.url)}" target="_blank" rel="noopener" class="tag-tool-pill" onclick="return visitTool('${jsStr(t.id)}','${esc(t.url)}')">
+      return `<a href="${esc(t.url)}" target="_blank" rel="noopener" class="tag-tool-pill" style="animation-delay:${(i%10)*0.04}s" onclick="return visitTool('${jsStr(t.id)}','${esc(t.url)}')">
         <img class="favicon" src="https://icons.duckduckgo.com/ip3/${esc(host)}.ico" alt="" loading="lazy" onerror="faviconFallback(this,'${esc(host)}')">${esc(t.name)}</a>`;
     }).join('') + '</div>';
   } catch {
@@ -347,8 +388,28 @@ function visitTool(id, url) {
   store.visit(id);
   const t = tools.find(x => x.id === id);
   if (t) { t.visits = (t.visits || 0) + 1; }
-  setTimeout(() => loadAndRender(), 100);
+  removeFromList('dashNunca', id);
+  removeFromList('dashPrio', id);
+  loadAndRender();
   return true;
+}
+
+function removeFromList(listId, toolId) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  const items = list.querySelectorAll('li');
+  for (const li of items) {
+    const link = li.querySelector('a[onclick*="visitTool"]');
+    if (link && link.getAttribute('onclick').includes(`'${toolId}'`)) {
+      li.remove();
+      break;
+    }
+  }
+  if (!list.querySelector('li')) {
+    list.innerHTML = '<li style="color:var(--text-dim);font-size:0.78rem">' +
+      (listId === 'dashNunca' ? 'Todas tienen al menos 1 visita 🎉' : 'Todas las importantes fueron visitadas ✅') +
+      '</li>';
+  }
 }
 
 async function toggleFav(id) {
@@ -357,6 +418,60 @@ async function toggleFav(id) {
     toast(r.favorite ? '⭐ Marcada como favorita' : 'Favorito quitado');
     loadAndRender();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+let lastDetected = null;
+
+function checkPasteAutoDetect() {
+  const input = document.getElementById('toolUrl');
+  const url = input.value.trim();
+  if (!url) return;
+  const detected = autoDetectFromUrl(url);
+  lastDetected = detected;
+  showDetect(detected);
+}
+
+function showDetect(d) {
+  document.getElementById('detectName').textContent = d.name;
+  document.getElementById('detectUrl').textContent = d.url;
+  document.getElementById('detectCat').textContent = d.category || '—';
+  document.getElementById('detectTags').innerHTML = d.tags.map(t => `<span class="tag tag-tag">${esc(t)}</span>`).join('') || '—';
+  document.getElementById('detectDesc').textContent = d.desc || '—';
+  document.getElementById('detectOverlay').classList.add('open');
+  document.getElementById('detectOverlay').querySelector('.btn-primary').focus();
+}
+
+function acceptDetect() {
+  if (!lastDetected) return;
+  closeDetect();
+  store.create({
+    name: lastDetected.name, url: lastDetected.url, desc: lastDetected.desc,
+    category: lastDetected.category || 'Otro', importance: 'util', tags: lastDetected.tags
+  }).then(() => {
+    toast(`"${lastDetected.name}" agregada`);
+    currentOffset = 0;
+    loadAndRender();
+    lastDetected = null;
+  }).catch(e => toast(e.message, 'error'));
+}
+
+function editDetect() {
+  if (!lastDetected) return;
+  closeDetect();
+  document.getElementById('toolName').value = lastDetected.name;
+  document.getElementById('toolUrl').value = lastDetected.url;
+  document.getElementById('toolDesc').value = lastDetected.desc || '';
+  document.getElementById('toolCat').value = lastDetected.category || 'Otro';
+  document.getElementById('toolImp').value = 'util';
+  previewFavicon('');
+  previewUrl(lastDetected.url);
+  document.querySelectorAll('#tagsContainer > .tag-tag').forEach(el => el.remove());
+  lastDetected.tags.forEach(t => addTagChip(t));
+  openModal();
+}
+
+function closeDetect() {
+  document.getElementById('detectOverlay').classList.remove('open');
 }
 
 function previewUrl(val) {
@@ -561,6 +676,7 @@ function init() {
 document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
 document.getElementById('confirmOverlay').addEventListener('click', function(e) { if (e.target === this) closeConfirm(); });
 document.getElementById('shortcutsOverlay').addEventListener('click', function(e) { if (e.target === this) closeShortcutsHelp(); });
+document.getElementById('detectOverlay').addEventListener('click', function(e) { if (e.target === this) closeDetect(); });
 
 const importZone = document.getElementById('importZone');
 importZone.addEventListener('dragover', e => { e.preventDefault(); importZone.classList.add('dragover'); });
@@ -572,8 +688,12 @@ importZone.addEventListener('drop', e => {
   if (file) { document.getElementById('importFile').files = e.dataTransfer.files; handleImport({ target: { files: [file] } }); }
 });
 
+window.addEventListener('focus', () => {
+  if (document.getElementById('section-dashboard').classList.contains('active')) loadDashboard();
+});
+
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeConfirm(); closeShortcutsHelp(); }
+  if (e.key === 'Escape') { closeModal(); closeConfirm(); closeShortcutsHelp(); closeDetect(); }
   if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
     const tag = e.target.tagName;
     if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') { e.preventDefault(); openShortcutsHelp(); }
