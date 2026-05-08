@@ -1,14 +1,14 @@
 # ToolKit Dev 🧰
 
-Organizador de herramientas para desarrolladores. Catalogá, clasificá y explorá tu colección personal de frameworks, servicios, canales de contenido, herramientas CLI y más.
+Organizador de herramientas para desarrolladores. **Pegá una URL y se agrega sola** — detecta automáticamente el nombre, descripción, categoría, tags y favicon desde la página web.
 
-Built with [Astro 5](https://astro.build) + [SQLite](https://sql.js.org) + vanilla JS.
+Built with [Astro 5](https://astro.build) + [React 19](https://react.dev) + [SQLite](https://sql.js.org) + [TypeScript](https://typescriptlang.org).
 
 ## Stack
 
 | Capa | Tecnología |
 |------|-----------|
-| Frontend | Astro 5 (SSR), CSS custom, vanilla JS |
+| Frontend | Astro 5 (SSR), React 19, TypeScript |
 | Backend | API REST embebida en rutas Astro |
 | DB | SQLite via `sql.js` |
 | Adapter | `@astrojs/node` (standalone) |
@@ -76,6 +76,12 @@ DELETE /api/tools/:id      Eliminar
 GET /api/stats       Resumen: totales, categorías, importancia, visitas, tags
 GET /api/categories  Lista de categorías
 GET /api/health      Health check (status, tools, uptime)
+```
+
+### Detección automática
+
+```
+POST /api/detect    Recibe { url }, fetchea la página y devuelve nombre, descripción, favicon, categoría y tags
 ```
 
 ### Acciones
