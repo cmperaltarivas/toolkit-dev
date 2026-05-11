@@ -28,15 +28,16 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   useEffect(() => {
     const check = () => {
       if (typeof google !== 'undefined' && google.accounts && btnRef.current) {
+        google.accounts.id.disableAutoSelect();
         google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
+          ux_mode: 'popup',
           callback: (resp: any) => { (window as any).__googleLoginCb?.(resp); },
         });
         google.accounts.id.renderButton(btnRef.current, {
           type: 'standard', shape: 'pill', theme: 'outline',
           text: 'signin_with', size: 'large', logo_alignment: 'left',
         });
-        google.accounts.id.prompt();
       } else {
         setTimeout(check, 500);
       }
@@ -53,14 +54,20 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
         Organizá tus herramientas de desarrollo. Pegá una URL y todo se completa solo.
       </p>
       <div ref={btnRef}></div>
-      <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>o</p>
-      <button onClick={() => {
-        const input = prompt('Ingresá el token de Google manualmente (debug):');
-        if (input) onLogin(input).catch((e: any) => setError(e.message));
-      }} style={{ fontSize: '0.72rem', color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
-        Iniciar sesión manual
-      </button>
-      {error && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{error}</p>}
+      {error && (
+        <div style={{ maxWidth: '340px', padding: '0.75rem', background: 'var(--danger-dim)', border: '1px solid rgba(255,71,87,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.72rem', color: 'var(--text)' }}>
+          <strong style={{ color: 'var(--danger)' }}>Error de autenticación:</strong>
+          {error.includes('invalid_client')
+            ? <p style={{ marginTop: '0.3rem', lineHeight: 1.4 }}>El Client ID de Google no está configurado para este origen.<br /><br />
+               <strong>Solución:</strong><br />
+               1. Andá a <span style={{ color: 'var(--primary)' }}>console.cloud.google.com/apis/credentials</span><br />
+               2. Seleccioná el Client ID <code style={{ fontSize: '0.6rem', wordBreak: 'break-all' }}>{GOOGLE_CLIENT_ID}</code><br />
+               3. En <strong>"Authorized JavaScript origins"</strong> agregá<br />
+               <code style={{ fontSize: '0.65rem' }}>http://localhost:3000</code><br />
+               4. Click Save y refrescá la página</p>
+            : <p style={{ marginTop: '0.3rem' }}>{error}</p>}
+        </div>
+      )}
     </div>
   );
 }
