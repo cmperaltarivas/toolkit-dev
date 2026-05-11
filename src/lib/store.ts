@@ -2,8 +2,18 @@ import type { Tool, ToolFormData, ApiListResponse, Stats } from '../types';
 
 const API = '/api';
 
+function getHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const jwt = typeof localStorage !== 'undefined' ? localStorage.getItem('toolkit_jwt') : null;
+  if (jwt) headers['authorization'] = `Bearer ${jwt}`;
+  return headers;
+}
+
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...getHeaders(), ...(options?.headers || {}) },
+  });
   if (!res.ok) {
     let msg = 'Error';
     try { const data = await res.json(); msg = data.error || `HTTP ${res.status}`; } catch {}

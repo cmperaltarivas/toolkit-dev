@@ -1,9 +1,12 @@
 import { qall } from '../../lib/db';
 import { json } from '../../lib/validate';
+import { getUserFromRequest } from '../../lib/auth';
 
-export function GET() {
+export function GET({ request }) {
   try {
-    const tools = qall('SELECT * FROM herramientas ORDER BY created_at DESC');
+    const user = getUserFromRequest(request);
+    if (!user) return json({ error: 'No autenticado' }, 401);
+    const tools = qall('SELECT * FROM herramientas WHERE user_id = ? ORDER BY created_at DESC', user.id);
     return new Response(JSON.stringify(tools), {
       status: 200,
       headers: {

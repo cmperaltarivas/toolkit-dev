@@ -25,12 +25,15 @@ interface Props {
 
 export default function Dashboard({ showToast, onVisit }: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
-  const [expandedTag, setExpandedTag] = useState<string | null>(null);
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [expandedImp, setExpandedImp] = useState<string | null>(null);
-  const [tagTools, setTagTools] = useState<any[] | null>(null);
-  const [catTools, setCatTools] = useState<any[] | null>(null);
-  const [impTools, setImpTools] = useState<any[] | null>(null);
+  const [expandedTag, setExpandedTag] = useState<string | null>(null);
+  const [loadingCat, setLoadingCat] = useState<string | null>(null);
+  const [loadingImp, setLoadingImp] = useState<string | null>(null);
+  const [loadingTag, setLoadingTag] = useState<string | null>(null);
+  const [catTools, setCatTools] = useState<Record<string, any[]>>({});
+  const [impTools, setImpTools] = useState<Record<string, any[]>>({});
+  const [tagTools, setTagTools] = useState<Record<string, any[]>>({});
 
   const load = useCallback(async () => {
     try { setStats(await store.getStats()); } catch { showToast('Error al cargar estadísticas', 'error'); }
@@ -38,34 +41,34 @@ export default function Dashboard({ showToast, onVisit }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleTagClick = async (tag: string) => {
-    if (expandedTag === tag) { setExpandedTag(null); setTagTools(null); return; }
-    setExpandedTag(tag);
-    setTagTools(null);
-    try {
-      const data = await store.list({ tag, limit: 100, offset: 0 });
-      setTagTools(data.tools || []);
-    } catch { setTagTools([]); }
-  };
-
-  const handleCatClick = async (cat: string) => {
+  const toggleCat = async (cat: string) => {
     if (expandedCat === cat) { setExpandedCat(null); return; }
     setExpandedCat(cat);
-    setCatTools(null);
-    try {
-      const data = await store.list({ category: cat, limit: 100, offset: 0 });
-      setCatTools(data.tools || []);
-    } catch { setCatTools([]); }
+    if (!catTools[cat]) {
+      setLoadingCat(cat);
+      try { const d = await store.list({ category: cat, limit: 100, offset: 0 }); setCatTools(p => ({ ...p, [cat]: d.tools || [] })); } catch { setCatTools(p => ({ ...p, [cat]: [] })); }
+      setLoadingCat(null);
+    }
   };
 
-  const handleImpClick = async (imp: string) => {
+  const toggleImp = async (imp: string) => {
     if (expandedImp === imp) { setExpandedImp(null); return; }
     setExpandedImp(imp);
-    setImpTools(null);
-    try {
-      const data = await store.list({ importance: imp, limit: 100, offset: 0 });
-      setImpTools(data.tools || []);
-    } catch { setImpTools([]); }
+    if (!impTools[imp]) {
+      setLoadingImp(imp);
+      try { const d = await store.list({ importance: imp, limit: 100, offset: 0 }); setImpTools(p => ({ ...p, [imp]: d.tools || [] })); } catch { setImpTools(p => ({ ...p, [imp]: [] })); }
+      setLoadingImp(null);
+    }
+  };
+
+  const toggleTag = async (tag: string) => {
+    if (expandedTag === tag) { setExpandedTag(null); return; }
+    setExpandedTag(tag);
+    if (!tagTools[tag]) {
+      setLoadingTag(tag);
+      try { const d = await store.list({ tag, limit: 100, offset: 0 }); setTagTools(p => ({ ...p, [tag]: d.tools || [] })); } catch { setTagTools(p => ({ ...p, [tag]: [] })); }
+      setLoadingTag(null);
+    }
   };
 
   if (!stats) return <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Cargando dashboard...</div>;
@@ -77,8 +80,22 @@ export default function Dashboard({ showToast, onVisit }: Props) {
   const maxVis = Math.max(...stats.masVisitadas.map(t => t.visits), 1);
   const maxTag = Math.max(...(stats.topTags || []).map(t => t.count), 1);
 
+  const renderPills = (tools: any[]) => tools.length === 0
+    ? <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0', display: 'block' }}>Sin herramientas</span>
+    : <div className="cat-pills">{tools.map(t => {
+        const host = hostFromUrl(t.url);
+        return (
+          <a key={t.id} href={t.url} target="_blank" rel="noopener" className="tag-tool-pill"
+            onClick={(e) => { e.preventDefault(); onVisit(t.id, t.url); }}>
+            <img className="favicon" src={`https://icons.duckduckgo.com/ip3/${host}.ico`} alt="" loading="lazy"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            {t.name}
+          </a>
+        );
+      })}</div>;
+
   return (
-    <div className="section active">
+    <div className="section active" id="section-dashboard">
       <p className="dash-desc">Resumen general de tu colección: distribución por categoría, importancia, herramientas más visitadas y tags frecuentes.</p>
 
       <div className="dash-grid">
@@ -94,7 +111,7 @@ export default function Dashboard({ showToast, onVisit }: Props) {
           <ul className="dash-list">
             {stats.porCategoria.map(c => (
               <li key={c.category}>
-                <span className="cat-lbl" style={{ cursor: 'pointer' }} onClick={() => handleCatClick(c.category)}>
+                <span className="cat-lbl" style={{ cursor: 'pointer' }} onClick={() => toggleCat(c.category)}>
                   {esc(c.category)}
                 </span>
                 <div className="bar"><div className="bar-fill" style={{ width: `${(c.count / maxCat) * 100}%` }} /></div>
@@ -102,21 +119,12 @@ export default function Dashboard({ showToast, onVisit }: Props) {
               </li>
             ))}
           </ul>
-          {expandedCat && (
-            <div className="tag-expanded open" style={{ marginTop: '0.5rem' }}>
-              {(catTools || []).map((t: any) => {
-                const host = hostFromUrl(t.url);
-                return (
-                  <a key={t.id} href={t.url} target="_blank" rel="noopener" className="tag-tool-pill"
-                    onClick={(e) => { e.preventDefault(); onVisit(t.id, t.url); }}>
-                    <img className="favicon" src={`https://icons.duckduckgo.com/ip3/${host}.ico`} alt="" loading="lazy"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    {t.name}
-                  </a>
-                );
-              })}
+          {expandedCat && catTools[expandedCat] !== undefined && (
+            <div className="cat-expanded-row" style={{ display: 'block !important', padding: '0.25rem 0.4rem 0.5rem', animation: 'fadeSlideDown 0.25s ease' }}>
+              {renderPills(catTools[expandedCat])}
             </div>
           )}
+          {loadingCat && <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0.4rem' }}>Cargando...</div>}
         </div>
         <div className="dash-card">
           <h3>Por importancia</h3>
@@ -125,7 +133,7 @@ export default function Dashboard({ showToast, onVisit }: Props) {
               const imp = IMPORTANCIAS.find(i => i.id === c.importance);
               return (
                 <li key={c.importance}>
-                  <span className="imp-lbl" style={{ cursor: 'pointer' }} onClick={() => handleImpClick(c.importance)}>
+                  <span className="imp-lbl" style={{ cursor: 'pointer' }} onClick={() => toggleImp(c.importance)}>
                     {imp ? imp.label : c.importance}
                   </span>
                   <div className="bar"><div className="bar-fill" style={{ width: `${(c.count / maxImp) * 100}%` }} /></div>
@@ -134,21 +142,12 @@ export default function Dashboard({ showToast, onVisit }: Props) {
               );
             })}
           </ul>
-          {expandedImp && (
-            <div className="tag-expanded open" style={{ marginTop: '0.5rem' }}>
-              {(impTools || []).map((t: any) => {
-                const host = hostFromUrl(t.url);
-                return (
-                  <a key={t.id} href={t.url} target="_blank" rel="noopener" className="tag-tool-pill"
-                    onClick={(e) => { e.preventDefault(); onVisit(t.id, t.url); }}>
-                    <img className="favicon" src={`https://icons.duckduckgo.com/ip3/${host}.ico`} alt="" loading="lazy"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                    {t.name}
-                  </a>
-                );
-              })}
+          {expandedImp && impTools[expandedImp] !== undefined && (
+            <div className="cat-expanded-row" style={{ display: 'block', padding: '0.25rem 0.4rem 0.5rem', animation: 'fadeSlideDown 0.25s ease' }}>
+              {renderPills(impTools[expandedImp])}
             </div>
           )}
+          {loadingImp && <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0.4rem' }}>Cargando...</div>}
         </div>
       </div>
 
@@ -174,28 +173,16 @@ export default function Dashboard({ showToast, onVisit }: Props) {
             return (
               <span key={t.tag} className={`cloud-tag ${expandedTag === t.tag ? 'active' : ''}`}
                 style={{ fontSize: `${size}rem` }}
-                onClick={() => handleTagClick(t.tag)}>#{t.tag}</span>
+                onClick={() => toggleTag(t.tag)}>#{t.tag}</span>
             );
           })}
         </div>
-        {expandedTag && tagTools && (
+        {expandedTag && tagTools[expandedTag] !== undefined && (
           <div className="tag-expanded open" style={{ marginTop: '0.75rem' }}>
-            {tagTools.length === 0
-              ? <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>Sin herramientas</span>
-              : tagTools.map((t: any) => {
-                  const host = hostFromUrl(t.url);
-                  return (
-                    <a key={t.id} href={t.url} target="_blank" rel="noopener" className="tag-tool-pill"
-                      onClick={(e) => { e.preventDefault(); onVisit(t.id, t.url); }}>
-                      <img className="favicon" src={`https://icons.duckduckgo.com/ip3/${host}.ico`} alt="" loading="lazy"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                      {t.name}
-                    </a>
-                  );
-                })
-            }
+            {renderPills(tagTools[expandedTag])}
           </div>
         )}
+        {loadingTag && <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0' }}>Cargando...</div>}
       </div>
 
       <div className="dash-card" style={{ marginTop: '0.85rem' }}>

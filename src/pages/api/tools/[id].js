@@ -1,9 +1,12 @@
 import { qget, qrun } from '../../../lib/db';
 import { validarTool, json } from '../../../lib/validate';
+import { getUserFromRequest } from '../../../lib/auth';
 
-export function GET({ params }) {
+export function GET({ params, request }) {
   try {
-    const tool = qget('SELECT * FROM herramientas WHERE id = ?', params.id);
+    const user = getUserFromRequest(request);
+    if (!user) return json({ error: 'No autenticado' }, 401);
+    const tool = qget('SELECT * FROM herramientas WHERE id = ? AND user_id = ?', params.id, user.id);
     if (!tool) return json({ error: 'No encontrada' }, 404);
     return json(tool);
   } catch (e) {
@@ -13,7 +16,9 @@ export function GET({ params }) {
 
 export async function PUT({ params, request }) {
   try {
-    const existing = qget('SELECT * FROM herramientas WHERE id = ?', params.id);
+    const user = getUserFromRequest(request);
+    if (!user) return json({ error: 'No autenticado' }, 401);
+    const existing = qget('SELECT * FROM herramientas WHERE id = ? AND user_id = ?', params.id, user.id);
     if (!existing) return json({ error: 'No encontrada' }, 404);
 
     const body = await request.json();
@@ -35,9 +40,11 @@ export async function PUT({ params, request }) {
   }
 }
 
-export function DELETE({ params }) {
+export function DELETE({ params, request }) {
   try {
-    const existing = qget('SELECT * FROM herramientas WHERE id = ?', params.id);
+    const user = getUserFromRequest(request);
+    if (!user) return json({ error: 'No autenticado' }, 401);
+    const existing = qget('SELECT * FROM herramientas WHERE id = ? AND user_id = ?', params.id, user.id);
     if (!existing) return json({ error: 'No encontrada' }, 404);
     qrun('DELETE FROM herramientas WHERE id = ?', params.id);
     return json({ ok: true });

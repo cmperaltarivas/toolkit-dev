@@ -39,6 +39,14 @@ const init = initSqlJs().then(SQL => {
   )`);
   try { db.run("ALTER TABLE herramientas ADD COLUMN favicon TEXT NOT NULL DEFAULT ''"); } catch {}
   try { db.run("ALTER TABLE herramientas ADD COLUMN last_visited_at TEXT"); } catch {}
+  try { db.run("ALTER TABLE herramientas ADD COLUMN user_id TEXT"); } catch {}
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
+    avatar TEXT, google_id TEXT NOT NULL UNIQUE,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  try { db.run("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch {}
+  db.run("DELETE FROM herramientas WHERE user_id IS NULL");
   saveDb();
 });
 

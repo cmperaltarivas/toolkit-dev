@@ -10,7 +10,62 @@ import DetectModal from './DetectModal';
 import ShortcutsModal from './ShortcutsModal';
 import Toast from './Toast';
 
-export default function App() {
+import { AuthProvider, useAuth } from '../lib/auth-context';
+
+const GOOGLE_CLIENT_ID = '2510880396-5ebhpnmja10ficfng71vkhculi59n6js.apps.googleusercontent.com';
+
+function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
+  const [error, setError] = useState('');
+  const btnRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    (window as any).__googleLoginCb = async (resp: any) => {
+      try { await onLogin(resp.credential); } catch (e: any) { setError(e.message || 'Error al autenticar'); }
+    };
+    return () => { delete (window as any).__googleLoginCb; };
+  }, [onLogin]);
+
+  useEffect(() => {
+    const check = () => {
+      if (typeof google !== 'undefined' && google.accounts && btnRef.current) {
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (resp: any) => { (window as any).__googleLoginCb?.(resp); },
+        });
+        google.accounts.id.renderButton(btnRef.current, {
+          type: 'standard', shape: 'pill', theme: 'outline',
+          text: 'signin_with', size: 'large', logo_alignment: 'left',
+        });
+        google.accounts.id.prompt();
+      } else {
+        setTimeout(check, 500);
+      }
+    };
+    setTimeout(check, 1000);
+  }, []);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '1rem', padding: '2rem' }}>
+      <h1 style={{ fontFamily: "var(--font-display)", fontSize: '2.2rem', background: 'linear-gradient(135deg, var(--primary), var(--secondary))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+        ToolKit Dev
+      </h1>
+      <p style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: '320px' }}>
+        Organizá tus herramientas de desarrollo. Pegá una URL y todo se completa solo.
+      </p>
+      <div ref={btnRef}></div>
+      <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>o</p>
+      <button onClick={() => {
+        const input = prompt('Ingresá el token de Google manualmente (debug):');
+        if (input) onLogin(input).catch((e: any) => setError(e.message));
+      }} style={{ fontSize: '0.72rem', color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+        Iniciar sesión manual
+      </button>
+      {error && <p style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{error}</p>}
+    </div>
+  );
+}
+
+function App() {
 
   const [tools, setTools] = useState<Tool[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -158,6 +213,11 @@ export default function App() {
     }
   };
 
+  const { user, loading: authLoading, login } = useAuth();
+
+  if (authLoading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-muted)' }}>Cargando...</div>;
+  if (!user) return <LoginScreen onLogin={login} />;
+
   return (
     <div className="app">
       <header className="header">
@@ -166,6 +226,8 @@ export default function App() {
           <h1>Organizador de<br />Herramientas Dev</h1>
         </div>
         <div className="header-right">
+          {user.avatar && <img src={user.avatar} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />}
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{user.name}</span>
           <button onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('toolkit_theme', next); }} className="theme-toggle" title="Cambiar tema">
             {theme === 'dark' ? '🌙' : '☀️'}
           </button>
@@ -256,5 +318,13 @@ export default function App() {
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {toastMsg && <Toast msg={toastMsg.msg} type={toastMsg.type} />}
     </div>
+  );
+}
+
+export default function AppWithAuth() {
+  return (
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   );
 }
