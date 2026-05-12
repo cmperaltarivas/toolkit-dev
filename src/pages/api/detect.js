@@ -1,4 +1,5 @@
 import { json } from '../../lib/validate';
+import { rateLimit } from '../../lib/rate-limit';
 
 const CATEGORIES = [
   'Frontend', 'Backend', 'DevOps', 'Base de Datos', 'Mobile', 'Testing',
@@ -66,13 +67,48 @@ function guessCategory(urlStr, title, desc) {
   return 'Otro';
 }
 
+const BLOCKED_HOSTS = [
+  'localhost', '127.0.0.1', '0.0.0.0', '::1',
+  '169.254.169.254', 'metadata.google.internal',
+];
+
+export function isPrivateIP(hostname) {
+  if (BLOCKED_HOSTS.includes(hostname.toLowerCase())) return true;
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+  if (ipv4) {
+    const parts = ipv4.slice(1).map(Number);
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 127) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+  }
+  return false;
+}
+
 export async function POST({ request }) {
   try {
+    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const rl = rateLimit(`detect:${ip}`, 10);
+    if (!rl.allowed) return json({ error: 'Demasiadas peticiones. Intentá de nuevo en un minuto.' }, 429);
+
     const { url } = await request.json();
     if (!url || typeof url !== 'string') return json({ error: 'URL requerida' }, 400);
 
     const urlStr = url.trim();
-    new URL(urlStr);
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(urlStr);
+    } catch {
+      return json({ error: 'URL inválida' }, 400);
+    }
+
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+      return json({ error: 'Solo se permiten URLs HTTP/HTTPS' }, 400);
+    }
+    if (isPrivateIP(parsedUrl.hostname)) {
+      return json({ error: 'No se permiten direcciones internas' }, 400);
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);

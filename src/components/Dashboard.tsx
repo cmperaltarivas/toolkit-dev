@@ -21,9 +21,10 @@ function timeAgo(dateStr: string) {
 interface Props {
   showToast: (msg: string, type?: 'success' | 'error') => void;
   onVisit: (id: string, url: string) => void;
+  refreshKey?: number;
 }
 
-export default function Dashboard({ showToast, onVisit }: Props) {
+export default function Dashboard({ showToast, onVisit, refreshKey = 0 }: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [expandedImp, setExpandedImp] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export default function Dashboard({ showToast, onVisit }: Props) {
     try { setStats(await store.getStats()); } catch { showToast('Error al cargar estadísticas', 'error'); }
   }, [showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   const toggleCat = async (cat: string) => {
     if (expandedCat === cat) { setExpandedCat(null); return; }
@@ -110,21 +111,21 @@ export default function Dashboard({ showToast, onVisit }: Props) {
           <h3>Por categoría</h3>
           <ul className="dash-list">
             {stats.porCategoria.map(c => (
-              <li key={c.category}>
+              <li key={c.category} style={{ display: 'flex', flexWrap: 'wrap' }}>
                 <span className="cat-lbl" style={{ cursor: 'pointer' }} onClick={() => toggleCat(c.category)}>
                   {esc(c.category)}
                 </span>
                 <div className="bar"><div className="bar-fill" style={{ width: `${(c.count / maxCat) * 100}%` }} /></div>
                 <span className="num">{c.count}</span>
+                {expandedCat === c.category && catTools[c.category] !== undefined && (
+                  <div className="cat-expanded-row" style={{ width: '100%', padding: '0.25rem 0.4rem 0.5rem', animation: 'fadeSlideDown 0.25s ease' }}>
+                    {renderPills(catTools[c.category])}
+                  </div>
+                )}
+                {loadingCat === c.category && <div style={{ width: '100%', fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0.4rem' }}>Cargando...</div>}
               </li>
             ))}
           </ul>
-          {expandedCat && catTools[expandedCat] !== undefined && (
-            <div className="cat-expanded-row" style={{ display: 'block !important', padding: '0.25rem 0.4rem 0.5rem', animation: 'fadeSlideDown 0.25s ease' }}>
-              {renderPills(catTools[expandedCat])}
-            </div>
-          )}
-          {loadingCat && <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0.4rem' }}>Cargando...</div>}
         </div>
         <div className="dash-card">
           <h3>Por importancia</h3>
@@ -132,22 +133,22 @@ export default function Dashboard({ showToast, onVisit }: Props) {
             {stats.porImportancia.map(c => {
               const imp = IMPORTANCIAS.find(i => i.id === c.importance);
               return (
-                <li key={c.importance}>
+                <li key={c.importance} style={{ display: 'flex', flexWrap: 'wrap' }}>
                   <span className="imp-lbl" style={{ cursor: 'pointer' }} onClick={() => toggleImp(c.importance)}>
                     {imp ? imp.label : c.importance}
                   </span>
                   <div className="bar"><div className="bar-fill" style={{ width: `${(c.count / maxImp) * 100}%` }} /></div>
                   <span className="num">{c.count}</span>
+                  {expandedImp === c.importance && impTools[c.importance] !== undefined && (
+                    <div className="cat-expanded-row" style={{ width: '100%', padding: '0.25rem 0.4rem 0.5rem', animation: 'fadeSlideDown 0.25s ease' }}>
+                      {renderPills(impTools[c.importance])}
+                    </div>
+                  )}
+                  {loadingImp === c.importance && <div style={{ width: '100%', fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0.4rem' }}>Cargando...</div>}
                 </li>
               );
             })}
           </ul>
-          {expandedImp && impTools[expandedImp] !== undefined && (
-            <div className="cat-expanded-row" style={{ display: 'block', padding: '0.25rem 0.4rem 0.5rem', animation: 'fadeSlideDown 0.25s ease' }}>
-              {renderPills(impTools[expandedImp])}
-            </div>
-          )}
-          {loadingImp && <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', padding: '0.25rem 0.4rem' }}>Cargando...</div>}
         </div>
       </div>
 

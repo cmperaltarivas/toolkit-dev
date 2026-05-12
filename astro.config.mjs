@@ -8,6 +8,6 @@ dotenv.config();
 export default defineConfig({
   output: 'server',
   adapter: node({ mode: 'standalone' }),
-  server: { port: 3000, host: true },
+  server: { port: parseInt(process.env.PORT || '3000', 10), host: true },
   integrations: [react()],
 });

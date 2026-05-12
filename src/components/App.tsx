@@ -11,8 +11,10 @@ import ShortcutsModal from './ShortcutsModal';
 import Toast from './Toast';
 
 import { AuthProvider, useAuth } from '../lib/auth-context';
+import ErrorBoundary from './ErrorBoundary';
 
-const GOOGLE_CLIENT_ID = '2510880396-5ebhpnmja10ficfng71vkhculi59n6js.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = (import.meta as any).env?.PUBLIC_GOOGLE_CLIENT_ID || '2510880396-5ebhpnmja10ficfng71vkhculi59n6js.apps.googleusercontent.com';
+const DEV_BYPASS = (import.meta as any).env?.PUBLIC_DEV_BYPASS_AUTH === 'true';
 
 function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   const [error, setError] = useState('');
@@ -26,6 +28,8 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
   }, [onLogin]);
 
   useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 30;
     const check = () => {
       if (typeof google !== 'undefined' && google.accounts && btnRef.current) {
         google.accounts.id.disableAutoSelect();
@@ -37,9 +41,16 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
         google.accounts.id.renderButton(btnRef.current, {
           type: 'standard', shape: 'pill', theme: 'outline',
           text: 'signin_with', size: 'large', logo_alignment: 'left',
+          use_fedcm_for_button: true,
         });
       } else {
-        setTimeout(check, 500);
+        attempts++;
+        if (attempts < maxAttempts) {
+          const delay = Math.min(500 * Math.pow(1.3, attempts), 8000);
+          setTimeout(check, delay);
+        } else {
+          setError('No se pudo cargar el botón de Google. Verificá tu conexión o desactivá bloqueadores de anuncios.');
+        }
       }
     };
     setTimeout(check, 1000);
@@ -93,9 +104,11 @@ function App() {
   const [sortField, setSortField] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [currentOffset, setCurrentOffset] = useState(0);
-  const [importResult, setImportResult] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<{ html: string } | null>(null);
+  const [dashKey, setDashKey] = useState(0);
   const PAGE_LIMIT = 50;
   const toastTimer = useRef<any>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
     setToastMsg({ msg, type });
@@ -106,6 +119,15 @@ function App() {
   useEffect(() => {
     if (typeof document !== 'undefined') document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('toolkit_tab');
+    if (saved === 'dashboard' || saved === 'import') setTab(saved);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('toolkit_tab', tab);
+  }, [tab]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -151,9 +173,15 @@ function App() {
 
   useEffect(() => { loadTools(); }, [loadTools]);
 
+  const debouncedLoadTools = useCallback((delay: number) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(loadTools, delay);
+  }, [loadTools]);
+
   const handleVisit = (id: string, url: string) => {
     store.visit(id);
     setTools(prev => prev.map(t => t.id === id ? { ...t, visits: (t.visits || 0) + 1 } : t));
+    setDashKey(k => k + 1);
     window.open(url, '_blank', 'noopener');
   };
 
@@ -210,17 +238,19 @@ function App() {
   };
 
   const handleImportFile = async (file: File) => {
-    setImportResult('Importando...');
+    setImportResult({ html: '<div class="import-result" style="background:var(--primary-dim);border:1px solid rgba(232,160,32,0.3)">Importando...</div>' });
     try {
       const r = await store.importFile(file);
-      setImportResult(`<div class="import-result" style="background:var(--primary-dim);border:1px solid rgba(232,160,32,0.3)">✅ ${r.message}</div>`);
+      setImportResult({ html: `<div class="import-result" style="background:var(--primary-dim);border:1px solid rgba(232,160,32,0.3)">✅ ${r.message}</div>` });
+      setTab('tools');
       loadTools();
     } catch (e: any) {
-      setImportResult(`<div class="import-result" style="background:var(--danger-dim);border:1px solid rgba(255,71,87,0.3)">❌ Error: ${e.message}</div>`);
+      const msg = e.message || 'Error desconocido';
+      setImportResult({ html: `<div class="import-result" style="background:var(--danger-dim);border:1px solid rgba(255,71,87,0.3)">❌ Error: ${msg}</div>` });
     }
   };
 
-  const { user, loading: authLoading, login } = useAuth();
+  const { user, loading: authLoading, login, logout } = useAuth();
 
   if (authLoading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-muted)' }}>Cargando...</div>;
   if (!user) return <LoginScreen onLogin={login} />;
@@ -233,8 +263,13 @@ function App() {
           <h1>Organizador de<br />Herramientas Dev</h1>
         </div>
         <div className="header-right">
-          {user.avatar && <img src={user.avatar} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />}
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{user.name}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '0.75rem' }}>
+            {user.avatar && <img src={user.avatar} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />}
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{user.name}</span>
+            <button onClick={logout} className="btn btn-sm btn-ghost" title="Cerrar sesión" style={{ color: 'var(--danger)', fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
+              Salir
+            </button>
+          </div>
           <button onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('toolkit_theme', next); }} className="theme-toggle" title="Cambiar tema">
             {theme === 'dark' ? '🌙' : '☀️'}
           </button>
@@ -249,25 +284,26 @@ function App() {
         </div>
       </header>
 
-      <nav className="nav-tabs">
+      <nav className="nav-tabs" role="tablist" aria-label="Secciones principales">
         {(['tools', 'dashboard', 'import'] as const).map(t => (
-          <button key={t} onClick={() => { setTab(t); if (t === 'dashboard') loadTools(); }} className={`nav-tab ${tab === t ? 'active' : ''}`}>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); if (t === 'dashboard') { setDashKey(k => k + 1); } }} className={`nav-tab ${tab === t ? 'active' : ''}`}>
             {t === 'tools' ? '📦 Herramientas' : t === 'dashboard' ? '📊 Dashboard' : '📥 Importar'}
           </button>
         ))}
       </nav>
 
       {tab === 'tools' && (
+        <ErrorBoundary fallback={<div className="section active" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Error al cargar herramientas. <button onClick={loadTools} style={{ color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button></div>}>
         <div className="section active">
           <Filters
-            search={search} onSearchChange={v => { setSearch(v); setTimeout(loadTools, 200); }}
+            search={search} onSearchChange={v => { setSearch(v); debouncedLoadTools(200); }}
             catFilter={catFilter} onCatChange={v => { setCatFilter(v); setFavFilter(false); loadTools(); }}
             impFilter={impFilter} onImpChange={v => { setImpFilter(v); loadTools(); }}
-            tagFilter={tagFilter} onTagChange={v => { setTagFilter(v); setTimeout(loadTools, 100); }}
+            tagFilter={tagFilter} onTagChange={v => { setTagFilter(v); debouncedLoadTools(100); }}
             favFilter={favFilter} onFavChange={v => { setFavFilter(v); loadTools(); }}
             sortField={sortField} sortOrder={sortOrder}
             onSortChange={(f, o) => { setSortField(f); setSortOrder(o); }}
-            onClear={() => { setSearch(''); setCatFilter(''); setImpFilter(''); setTagFilter(''); setFavFilter(false); setSortField('created_at'); setSortOrder('desc'); setTimeout(loadTools, 50); }}
+            onClear={() => { setSearch(''); setCatFilter(''); setImpFilter(''); setTagFilter(''); setFavFilter(false); setSortField('created_at'); setSortOrder('desc'); debouncedLoadTools(50); }}
           />
           <div className="grid">
             {loading ? (
@@ -284,15 +320,21 @@ function App() {
                 <p>{search || catFilter || impFilter || tagFilter || favFilter ? 'Ninguna coincide con los filtros' : 'Agregá tu primera herramienta'}</p>
               </div>
             ) : tools.map((t, i) => (
-              <ToolCard key={t.id} tool={t} index={i} onVisit={handleVisit} onToggleFav={(id) => { store.toggleFav(id); loadTools(); }} onEdit={(tool) => { setEditTool(tool); setModalOpen(true); }} onDelete={(id) => setDeleteTarget(id)} />
+              <ToolCard key={t.id} tool={t} index={i} onVisit={handleVisit} onToggleFav={async (id) => { await store.toggleFav(id); loadTools(); }} onEdit={(tool) => { setEditTool(tool); setModalOpen(true); }} onDelete={(id) => setDeleteTarget(id)} />
             ))}
           </div>
         </div>
+        </ErrorBoundary>
       )}
 
-      {tab === 'dashboard' && <Dashboard showToast={showToast} onVisit={handleVisit} />}
+      {tab === 'dashboard' && (
+        <ErrorBoundary fallback={<div className="section active" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Error al cargar dashboard.</div>}>
+          <Dashboard refreshKey={dashKey} showToast={showToast} onVisit={handleVisit} />
+        </ErrorBoundary>
+      )}
 
       {tab === 'import' && (
+        <ErrorBoundary fallback={<div className="section active" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Error en la sección de importación.</div>}>
         <div className="section active">
           <div className="import-zone" onClick={() => document.getElementById('importFile')?.click()}
             onDragOver={e => { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add('dragover'); }}
@@ -303,15 +345,16 @@ function App() {
             <p style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>O un archivo JSON de backup</p>
             <input type="file" id="importFile" accept=".html,.json" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }} />
           </div>
-          {importResult && <div dangerouslySetInnerHTML={{ __html: importResult }} />}
+          {importResult && <div dangerouslySetInnerHTML={{ __html: importResult.html }} />}
         </div>
+        </ErrorBoundary>
       )}
 
       {modalOpen && <ToolModal tool={editTool} initialData={null} onSave={handleSave} onClose={() => { setModalOpen(false); setEditTool(null); }} />}
       {deleteTarget && (
         <div className="modal-overlay open" onClick={e => { if (e.target === e.currentTarget) setDeleteTarget(null); }}>
-          <div className="modal confirm-modal">
-            <div className="modal-header"><h2>Eliminar herramienta</h2><button className="modal-close" onClick={() => setDeleteTarget(null)}>&times;</button></div>
+          <div className="modal confirm-modal" role="alertdialog" aria-modal="true" aria-label="Eliminar herramienta">
+            <div className="modal-header"><h2 id="deleteTitle">Eliminar herramienta</h2><button className="modal-close" onClick={() => setDeleteTarget(null)} aria-label="Cerrar">&times;</button></div>
             <div className="confirm-body">
               <div className="confirm-icon"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
               <p className="confirm-text">¿Estás seguro de eliminar esta herramienta?</p>

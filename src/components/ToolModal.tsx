@@ -70,10 +70,10 @@ export default function ToolModal({ tool, initialData, onSave, onClose }: Props)
 
   return (
     <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ maxWidth: '440px' }}>
+      <div className="modal" style={{ maxWidth: '440px' }} role="dialog" aria-modal="true" aria-label={isEdit ? 'Editar herramienta' : 'Nueva herramienta'}>
         <div className="modal-header">
-          <h2>{isEdit ? 'Editar herramienta' : 'Nueva herramienta'}</h2>
-          <button className="modal-close" onClick={onClose}>&times;</button>
+          <h2 id="toolModalTitle">{isEdit ? 'Editar herramienta' : 'Nueva herramienta'}</h2>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">&times;</button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="form-group">

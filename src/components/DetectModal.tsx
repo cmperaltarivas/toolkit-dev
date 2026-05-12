@@ -10,10 +10,10 @@ interface Props {
 export default function DetectModal({ data, onAccept, onEdit, onClose }: Props) {
   return (
     <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal detect-modal">
+      <div className="modal detect-modal" role="dialog" aria-modal="true" aria-label="Herramienta detectada">
         <div className="modal-header">
-          <h2>🔍 Herramienta detectada</h2>
-          <button className="modal-close" onClick={onClose}>&times;</button>
+          <h2 id="detectTitle">🔍 Herramienta detectada</h2>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">&times;</button>
         </div>
         <div className="detect-body">
           <div className="detect-row"><span className="detect-lbl">Nombre</span><span className="detect-val">{data.name}</span></div>

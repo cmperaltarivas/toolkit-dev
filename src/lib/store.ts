@@ -65,7 +65,7 @@ export const store = {
   },
 
   async visit(id: string): Promise<void> {
-    fetch(`${API}/visit/${id}`, { method: 'PATCH' }).catch(() => {});
+    fetch(`${API}/visit/${id}`, { method: 'PATCH', headers: { ...getHeaders() } }).catch(() => {});
   },
 
   async getStats(): Promise<Stats> {

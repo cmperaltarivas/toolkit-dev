@@ -37,16 +37,26 @@ const init = initSqlJs().then(SQL => {
     last_visited_at TEXT,
     created_at TEXT, updated_at TEXT
   )`);
-  try { db.run("ALTER TABLE herramientas ADD COLUMN favicon TEXT NOT NULL DEFAULT ''"); } catch {}
-  try { db.run("ALTER TABLE herramientas ADD COLUMN last_visited_at TEXT"); } catch {}
-  try { db.run("ALTER TABLE herramientas ADD COLUMN user_id TEXT"); } catch {}
+  try { db.run("ALTER TABLE herramientas ADD COLUMN favicon TEXT NOT NULL DEFAULT ''"); } catch (e) { if (!e.message?.includes('duplicate column')) console.error('DB migration error (favicon):', e.message); }
+  try { db.run("ALTER TABLE herramientas ADD COLUMN last_visited_at TEXT"); } catch (e) { if (!e.message?.includes('duplicate column')) console.error('DB migration error (last_visited_at):', e.message); }
+  try { db.run("ALTER TABLE herramientas ADD COLUMN user_id TEXT"); } catch (e) { if (!e.message?.includes('duplicate column')) console.error('DB migration error (user_id):', e.message); }
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
     avatar TEXT, google_id TEXT NOT NULL UNIQUE,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
-  try { db.run("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch {}
-  db.run("DELETE FROM herramientas WHERE user_id IS NULL");
+  try { db.run("ALTER TABLE users ADD COLUMN avatar TEXT"); } catch (e) { if (!e.message?.includes('duplicate column')) console.error('DB migration error (avatar):', e.message); }
+  const orphanCount = db.exec("SELECT COUNT(*) as c FROM herramientas WHERE user_id IS NULL")[0]?.values[0]?.[0];
+  if (orphanCount > 0) {
+    console.warn(`⚠ Advertencia: eliminando ${orphanCount} herramientas sin user_id.`);
+    db.run("DELETE FROM herramientas WHERE user_id IS NULL");
+  }
+  db.run(`CREATE INDEX IF NOT EXISTS idx_herramientas_user_id ON herramientas(user_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_herramientas_category ON herramientas(category)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_herramientas_importance ON herramientas(importance)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_herramientas_favorite ON herramientas(favorite)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_herramientas_created_at ON herramientas(created_at)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`);
   saveDb();
 });
 
@@ -84,6 +94,7 @@ export function qtransaction(fn) {
     inTransaction = false;
     saveDb();
   } catch (e) {
+    try { db.run('ROLLBACK'); } catch {}
     inTransaction = false;
     throw e;
   }

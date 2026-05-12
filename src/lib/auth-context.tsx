@@ -23,6 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchMe = useCallback(async () => {
+    const devBypass = (import.meta as any).env?.PUBLIC_DEV_BYPASS_AUTH === 'true';
+    if (devBypass) {
+      localStorage.setItem('toolkit_jwt', 'dev-bypass');
+      setUser({ id: 'dev-user', name: 'Dev Local', email: 'dev@localhost', avatar: '' });
+      setLoading(false);
+      return;
+    }
     const token = localStorage.getItem('toolkit_jwt');
     if (!token) { setLoading(false); return; }
     try {
@@ -45,13 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     localStorage.setItem('toolkit_jwt', data.jwt);
     setUser(data.user);
-    window.location.reload();
   };
 
   const logout = () => {
     localStorage.removeItem('toolkit_jwt');
     setUser(null);
-    window.location.reload();
   };
 
   return (

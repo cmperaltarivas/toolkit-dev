@@ -8,10 +8,10 @@ const SHORTCUTS = [
 export default function ShortcutsModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal shortcuts-modal">
+      <div className="modal shortcuts-modal" role="dialog" aria-modal="true" aria-label="Atajos de teclado">
         <div className="modal-header">
-          <h2>⌨ Atajos de teclado</h2>
-          <button className="modal-close" onClick={onClose}>&times;</button>
+          <h2 id="shortcutsTitle">⌨ Atajos de teclado</h2>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">&times;</button>
         </div>
         <div className="shortcuts-list">
           {SHORTCUTS.map(s => (
